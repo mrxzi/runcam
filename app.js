@@ -184,6 +184,9 @@
   let canvasW = 0;
   let canvasH = 0;
 
+  // Canvas stream track for Safari requestFrame()
+  let canvasStreamTrack = null;
+
   // Camera lens system
   let allVideoDevices = [];       // All enumerated video devices
   let backCameras = {};           // { '0.5': deviceId, '1': deviceId, '2': deviceId }
@@ -467,6 +470,13 @@
   function renderFrame() {
     drawCameraFrame();
     drawOverlay();
+
+    // Tell Safari/iOS that a new frame is ready to capture
+    // Without this, captureStream on Safari freezes after 1st frame
+    if (canvasStreamTrack && canvasStreamTrack.requestFrame) {
+      canvasStreamTrack.requestFrame();
+    }
+
     animFrameId = requestAnimationFrame(renderFrame);
   }
 
@@ -661,9 +671,14 @@
   function startRecording() {
     recordedChunks = [];
 
-    // captureStream(0) = capture frame on every canvas paint (synced to rAF)
-    // This produces much smoother video than a fixed framerate
-    const canvasStream = mainCanvas.captureStream(0);
+    // captureStream(30) = 30fps — works reliably on ALL browsers including Safari iOS
+    // captureStream(0) freezes on Safari because it needs manual requestFrame()
+    const canvasStream = mainCanvas.captureStream(30);
+
+    // Store the video track so we can call requestFrame() in the render loop
+    // This is critical for Safari/iOS — without it, video freezes
+    const videoTracks = canvasStream.getVideoTracks();
+    canvasStreamTrack = videoTracks.length > 0 ? videoTracks[0] : null;
 
     if (audioStream) {
       audioStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
@@ -765,6 +780,7 @@
       if (mediaRecorder._safetyInterval) clearInterval(mediaRecorder._safetyInterval);
       if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     }
+    canvasStreamTrack = null;
     btnPause.classList.add('hidden');
     btnResume.classList.add('hidden');
     btnStop.classList.add('hidden');
