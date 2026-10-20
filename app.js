@@ -701,7 +701,7 @@
     }
 
     // High bitrate for smooth, sharp video
-    const opts = { videoBitsPerSecond: 12000000 }; // 12 Mbps for 60fps
+    const opts = { videoBitsPerSecond: 25000000 }; // 25 Mbps — near-lossless quality
     if (mime) opts.mimeType = mime;
 
     try {
@@ -709,7 +709,7 @@
     } catch (e) {
       // Fallback without options
       try {
-        mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 12000000 });
+        mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 25000000 });
       } catch (e2) {
         mediaRecorder = new MediaRecorder(canvasStream);
       }
