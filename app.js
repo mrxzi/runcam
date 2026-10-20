@@ -660,29 +660,45 @@
 
   function startRecording() {
     recordedChunks = [];
-    const canvasStream = mainCanvas.captureStream(30);
+
+    // captureStream(0) = capture frame on every canvas paint (synced to rAF)
+    // This produces much smoother video than a fixed framerate
+    const canvasStream = mainCanvas.captureStream(0);
 
     if (audioStream) {
       audioStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
     }
 
+    // Prioritize MP4 (works on Safari/iPhone), then WebM as fallback
     const mimeTypes = [
-      'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus',
-      'video/webm;codecs=vp9', 'video/webm;codecs=vp8',
-      'video/webm', 'video/mp4',
+      'video/mp4;codecs=h264,aac',
+      'video/mp4;codecs=h264',
+      'video/mp4',
+      'video/webm;codecs=h264,opus',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
     ];
     let mime = '';
     for (const m of mimeTypes) {
       if (MediaRecorder.isTypeSupported(m)) { mime = m; break; }
     }
 
-    const opts = { videoBitsPerSecond: 5000000 };
+    // High bitrate for smooth, sharp video
+    const opts = { videoBitsPerSecond: 8000000 }; // 8 Mbps
     if (mime) opts.mimeType = mime;
 
     try {
       mediaRecorder = new MediaRecorder(canvasStream, opts);
     } catch (e) {
-      mediaRecorder = new MediaRecorder(canvasStream);
+      // Fallback without options
+      try {
+        mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 8000000 });
+      } catch (e2) {
+        mediaRecorder = new MediaRecorder(canvasStream);
+      }
     }
 
     mediaRecorder.ondataavailable = e => {
@@ -690,11 +706,22 @@
     };
 
     mediaRecorder.onstop = () => {
-      recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+      const type = mediaRecorder.mimeType || 'video/mp4';
+      recordedBlob = new Blob(recordedChunks, { type });
       showPreview();
     };
 
-    mediaRecorder.start(1000);
+    // No timeslice = continuous recording (smoother, no chunk boundary stutters)
+    mediaRecorder.start();
+
+    // Safety: periodically request data so long recordings don't lose everything on crash
+    mediaRecorder._safetyInterval = setInterval(() => {
+      if (mediaRecorder.state === 'recording') {
+        mediaRecorder.requestData();
+      }
+    }, 5000);
+
+    console.log('Recording started, format:', mediaRecorder.mimeType);
   }
 
   // ═══════════════════════════════════════════
@@ -734,7 +761,10 @@
   function onStop() {
     isRecording = false; isPaused = false;
     stopTimer();
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    if (mediaRecorder) {
+      if (mediaRecorder._safetyInterval) clearInterval(mediaRecorder._safetyInterval);
+      if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    }
     btnPause.classList.add('hidden');
     btnResume.classList.add('hidden');
     btnStop.classList.add('hidden');
@@ -765,11 +795,10 @@
 
   function downloadVideo() {
     if (!recordedBlob) return;
-    const ext = recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(recordedBlob);
-    a.download = `RunCam_${ts}.${ext}`;
+    a.download = `RunCam_${ts}.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
