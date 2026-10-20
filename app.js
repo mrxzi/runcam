@@ -262,7 +262,7 @@
           deviceId: { exact: selectedDeviceId },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
+          frameRate: { ideal: 60 },
         };
       } else {
         // Default: use facingMode
@@ -270,7 +270,7 @@
           facingMode,
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
+          frameRate: { ideal: 60 },
         };
       }
 
@@ -671,9 +671,8 @@
   function startRecording() {
     recordedChunks = [];
 
-    // captureStream(30) = 30fps — works reliably on ALL browsers including Safari iOS
-    // captureStream(0) freezes on Safari because it needs manual requestFrame()
-    const canvasStream = mainCanvas.captureStream(30);
+    // 60fps — max achievable in browser (rAF caps at display refresh rate)
+    const canvasStream = mainCanvas.captureStream(60);
 
     // Store the video track so we can call requestFrame() in the render loop
     // This is critical for Safari/iOS — without it, video freezes
@@ -702,7 +701,7 @@
     }
 
     // High bitrate for smooth, sharp video
-    const opts = { videoBitsPerSecond: 8000000 }; // 8 Mbps
+    const opts = { videoBitsPerSecond: 12000000 }; // 12 Mbps for 60fps
     if (mime) opts.mimeType = mime;
 
     try {
@@ -710,7 +709,7 @@
     } catch (e) {
       // Fallback without options
       try {
-        mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 8000000 });
+        mediaRecorder = new MediaRecorder(canvasStream, { videoBitsPerSecond: 12000000 });
       } catch (e2) {
         mediaRecorder = new MediaRecorder(canvasStream);
       }
